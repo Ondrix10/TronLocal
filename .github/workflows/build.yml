@@ -20,10 +20,12 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: |
-            platforms;android-34
-            build-tools;34.0.0
+            platforms;android-33
+            build-tools;33.0.2
 
-      - run: yes | sdkmanager --licenses >/dev/null || true
+      - run: echo y | sdkmanager --licenses || true
+
+      - run: sdkmanager --list_installed
 
       - uses: gradle/actions/setup-gradle@v4
         with:
