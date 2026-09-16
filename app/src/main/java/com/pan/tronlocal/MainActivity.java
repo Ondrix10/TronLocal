@@ -12,11 +12,7 @@ public class MainActivity extends Activity {
     @Override
     public void onCreate(Bundle b) {
         super.onCreate(b);
-
-        // Nejdřív vytvořit a nastavit obsah aplikace.
-        // Až potom nastavovat fullscreen, aby DecorView existoval.
         setContentView(new GameView(this));
-
         requestImmersiveFullscreen();
     }
 
@@ -25,12 +21,7 @@ public class MainActivity extends Activity {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN
         );
-
         getWindow().setNavigationBarColor(Color.BLACK);
-
-        // Kompatibilní fullscreen bez WindowInsetsController.
-        // Nepoužíváme getInsetsController(), protože na některých
-        // zařízeních může při startu vracet null.
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN
                         | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -44,29 +35,20 @@ public class MainActivity extends Activity {
 
 class GameView extends View {
 
-    enum Mode {
-        MENU,
-        COUNTDOWN,
-        PLAYING,
-        ROUND_OVER,
-        MATCH_OVER
-    }
-
-    enum GameType {
-        MULTI,
-        SOLO
-    }
+    enum Mode { MENU, COUNTDOWN, PLAYING, ROUND_OVER, MATCH_OVER }
+    enum GameType { MULTI, SOLO }
 
     static class Player {
         float x, y, angle;
         int color, id;
-        boolean alive, left, right, ai;
+        boolean alive = true;
+        boolean left = false, right = false;
+        boolean ai = false;
         long nextAiMs;
 
         Player(int id, int color) {
             this.id = id;
             this.color = color;
-            this.alive = true;
         }
     }
 
@@ -101,8 +83,8 @@ class GameView extends View {
     long countdownUntil;
     long roundOverUntil;
 
-    float speed = 190f;
-    float turnSpeed = (float) Math.toRadians(185);
+    float speed = 200f;
+    float turnSpeed = (float)Math.toRadians(185);
     float dt;
 
     long[] nextGapMs = new long[4];
@@ -110,19 +92,16 @@ class GameView extends View {
 
     int width, height;
     int gameL, gameT, gameR, gameB;
+    int controlTop;
 
     int menuPage = 0;
-    int menuScroll = 0;
 
     GameView(Context c) {
         super(c);
-
         setBackgroundColor(Color.BLACK);
         setFocusable(true);
-
         text.setTypeface(Typeface.MONOSPACE);
         text.setTextAlign(Paint.Align.CENTER);
-
         p.setAntiAlias(false);
     }
 
@@ -132,25 +111,20 @@ class GameView extends View {
 
         int shortSide = Math.max(1, Math.min(width, height));
 
-        int controlH = Math.max(
-                120,
-                Math.round(shortSide * 0.19f)
-        );
+        // Spodní ovládací panel. Herní plocha je nad ním.
+        controlTop = height - Math.max(125, Math.round(shortSide * 0.22f));
 
-        int margin = Math.max(
-                8,
-                Math.round(shortSide * 0.018f)
-        );
+        int margin = Math.max(8, Math.round(shortSide * 0.018f));
 
         gameL = margin;
         gameR = width - margin;
-
-        gameT = controlH + margin;
-        gameB = height - controlH - margin;
+        gameT = margin + 45;
+        gameB = controlTop - margin;
 
         if (gameB <= gameT + 100) {
-            gameT = height / 5;
-            gameB = height - height / 5;
+            gameT = height / 8;
+            gameB = height * 2 / 3;
+            controlTop = gameB + margin;
         }
 
         if (trail == null
@@ -162,21 +136,14 @@ class GameView extends View {
                     height,
                     Bitmap.Config.ARGB_8888
             );
-
             trailCanvas = new Canvas(trail);
             trail.eraseColor(Color.BLACK);
         }
     }
 
     @Override
-    protected void onSizeChanged(
-            int w,
-            int h,
-            int oldw,
-            int oldh
-    ) {
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-
         trail = null;
         layoutGame();
     }
@@ -188,17 +155,13 @@ class GameView extends View {
     }
 
     void applySettings() {
-        speed = speedLevel == 1
-                ? 145f
-                : speedLevel == 2
-                ? 200f
+        speed = speedLevel == 1 ? 145f
+                : speedLevel == 2 ? 200f
                 : 265f;
 
-        turnSpeed = (float) Math.toRadians(
-                speedLevel == 1
-                        ? 160
-                        : speedLevel == 2
-                        ? 185
+        turnSpeed = (float)Math.toRadians(
+                speedLevel == 1 ? 160
+                        : speedLevel == 2 ? 185
                         : 210
         );
     }
@@ -214,9 +177,7 @@ class GameView extends View {
 
         for (int i = 0; i < count; i++) {
             players[i] = new Player(i, COLORS[i]);
-
-            players[i].ai =
-                    gameType == GameType.SOLO && i > 0;
+            players[i].ai = gameType == GameType.SOLO && i > 0;
         }
 
         for (int i = count; i < 4; i++) {
@@ -226,41 +187,20 @@ class GameView extends View {
         long now = System.currentTimeMillis();
 
         for (int i = 0; i < count; i++) {
-
             boolean placed = false;
 
-            for (int tries = 0;
-                 tries < 200 && !placed;
-                 tries++) {
-
-                float x =
-                        gameL
-                                + 55
-                                + rnd.nextFloat()
-                                * Math.max(
-                                1,
-                                gameR - gameL - 110
-                        );
-
-                float y =
-                        gameT
-                                + 55
-                                + rnd.nextFloat()
-                                * Math.max(
-                                1,
-                                gameB - gameT - 110
-                        );
+            for (int tries = 0; tries < 300 && !placed; tries++) {
+                float x = gameL + 45
+                        + rnd.nextFloat() * Math.max(1, gameR - gameL - 90);
+                float y = gameT + 45
+                        + rnd.nextFloat() * Math.max(1, gameB - gameT - 90);
 
                 placed = true;
 
                 for (int j = 0; j < i; j++) {
-
                     float dx = x - players[j].x;
                     float dy = y - players[j].y;
-
-                    if (dx * dx + dy * dy
-                            < 120 * 120) {
-
+                    if (dx * dx + dy * dy < 150 * 150) {
                         placed = false;
                         break;
                     }
@@ -273,29 +213,21 @@ class GameView extends View {
             }
 
             players[i].angle =
-                    rnd.nextFloat()
-                            * (float) (Math.PI * 2);
-
+                    rnd.nextFloat() * (float)(Math.PI * 2);
             players[i].alive = true;
             players[i].left = false;
             players[i].right = false;
 
-            nextGapMs[i] =
-                    now + 2400 + rnd.nextInt(1800);
-
+            // Normální souvislá čára. První díra přijde až po několika sekundách.
+            nextGapMs[i] = now + 2800 + rnd.nextInt(1800);
             gapUntilMs[i] = 0;
 
-            players[i].nextAiMs =
-                    now + 250 + rnd.nextInt(250);
+            players[i].nextAiMs = now + 150 + rnd.nextInt(200);
         }
 
         mode = Mode.COUNTDOWN;
-
-        countdownUntil =
-                System.currentTimeMillis() + 1600;
-
+        countdownUntil = now + 1600;
         lastFrame = System.nanoTime();
-
         invalidate();
     }
 
@@ -305,156 +237,99 @@ class GameView extends View {
     }
 
     boolean solidAt(int x, int y) {
-
-        if (x < gameL
-                || x >= gameR
-                || y < gameT
-                || y >= gameB) {
-
+        if (x < gameL || x >= gameR || y < gameT || y >= gameB) {
             return true;
         }
-
         return trail.getPixel(x, y) != Color.BLACK;
     }
 
-    void drawSegment(
-            Player pl,
-            float x0,
-            float y0,
-            float x1,
-            float y1
-    ) {
+    boolean collisionAhead(Player q) {
+        // Nekontrolujeme pixel přímo pod hlavou:
+        // ten patří právě nakreslené vlastní stopě.
+        float ca = (float)Math.cos(q.angle);
+        float sa = (float)Math.sin(q.angle);
+
+        // Několik bodů před hlavou zachytí i rychlý průjezd přes čáru.
+        int[] distances = { 5, 10, 15, 20 };
+
+        for (int d : distances) {
+            int x = Math.round(q.x + ca * d);
+            int y = Math.round(q.y + sa * d);
+
+            if (solidAt(x, y)) return true;
+
+            // Malý boční vzorek kvůli 4px stopě a rychlému pohybu.
+            int sx = Math.round(-sa * 2.5f);
+            int sy = Math.round(ca * 2.5f);
+
+            if (solidAt(x + sx, y + sy)
+                    || solidAt(x - sx, y - sy)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void drawSegment(Player pl, float x0, float y0, float x1, float y1) {
         p.setColor(pl.color);
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeWidth(4f);
         p.setStrokeCap(Paint.Cap.SQUARE);
         p.setAntiAlias(false);
-
-        trailCanvas.drawLine(
-                x0,
-                y0,
-                x1,
-                y1,
-                p
-        );
+        trailCanvas.drawLine(x0, y0, x1, y1, p);
     }
 
     void update() {
-
         if (mode == Mode.COUNTDOWN) {
-
-            if (System.currentTimeMillis()
-                    >= countdownUntil) {
-
+            if (System.currentTimeMillis() >= countdownUntil) {
                 mode = Mode.PLAYING;
+                lastFrame = System.nanoTime();
             }
-
             return;
         }
 
-        if (mode != Mode.PLAYING) {
-            return;
-        }
+        if (mode != Mode.PLAYING) return;
 
-        long now = System.nanoTime();
-
-        dt = Math.min(
-                .033f,
-                (now - lastFrame)
-                        / 1_000_000_000f
-        );
-
-        lastFrame = now;
+        long nowNano = System.nanoTime();
+        dt = Math.min(0.033f,
+                (nowNano - lastFrame) / 1_000_000_000f);
+        lastFrame = nowNano;
 
         long ms = System.currentTimeMillis();
-
         int count = totalPlayers();
 
         for (int i = 0; i < count; i++) {
-
-            if (players[i] == null
-                    || !players[i].alive) {
-                continue;
-            }
-
             Player q = players[i];
+            if (q == null || !q.alive) continue;
 
-            if (q.ai) {
-                updateAI(q, ms);
-            }
+            if (q.ai) updateAI(q, ms);
 
-            if (q.left) {
-                q.angle -= turnSpeed * dt;
-            }
+            if (q.left) q.angle -= turnSpeed * dt;
+            if (q.right) q.angle += turnSpeed * dt;
 
-            if (q.right) {
-                q.angle += turnSpeed * dt;
-            }
+            float nx = q.x
+                    + (float)Math.cos(q.angle) * speed * dt;
+            float ny = q.y
+                    + (float)Math.sin(q.angle) * speed * dt;
 
-            float nx =
-                    q.x
-                            + (float) Math.cos(q.angle)
-                            * speed
-                            * dt;
+            boolean gap = ms < gapUntilMs[i];
 
-            float ny =
-                    q.y
-                            + (float) Math.sin(q.angle)
-                            * speed
-                            * dt;
-
-            boolean gap =
-                    ms < gapUntilMs[i];
-
-            if (ms >= nextGapMs[i]
-                    && ms >= gapUntilMs[i]) {
-
-                gapUntilMs[i] =
-                        ms + 170 + rnd.nextInt(150);
-
-                nextGapMs[i] =
-                        gapUntilMs[i]
-                                + 2100
-                                + rnd.nextInt(1900);
-
+            if (ms >= nextGapMs[i] && ms >= gapUntilMs[i]) {
+                // Jen občasná krátká mezera, ne nepřetržité mezery.
+                gapUntilMs[i] = ms + 180 + rnd.nextInt(150);
+                nextGapMs[i] = gapUntilMs[i]
+                        + 2300 + rnd.nextInt(2300);
                 gap = true;
             }
 
-            float probe = 8f;
-
-            int px = Math.round(
-                    q.x
-                            + (float) Math.cos(q.angle)
-                            * probe
-            );
-
-            int py = Math.round(
-                    q.y
-                            + (float) Math.sin(q.angle)
-                            * probe
-            );
-
-            if (!gap
-                    && (
-                    solidAt(px, py)
-                            || solidAt(
-                            Math.round(q.x),
-                            Math.round(q.y)
-                    )
-            )) {
-
+            if (!gap && collisionAhead(q)) {
                 kill(i);
                 continue;
             }
 
             if (!gap) {
-                drawSegment(
-                        q,
-                        q.x,
-                        q.y,
-                        nx,
-                        ny
-                );
+                drawSegment(q, q.x, q.y, nx, ny);
             }
 
             q.x = nx;
@@ -465,109 +340,69 @@ class GameView extends View {
         int last = -1;
 
         for (int i = 0; i < count; i++) {
-
-            if (players[i] != null
-                    && players[i].alive) {
-
+            if (players[i] != null && players[i].alive) {
                 alive++;
                 last = i;
             }
         }
 
         if (alive <= 1) {
-
             if (alive == 1 && last >= 0) {
-
+                // Poslední přeživší dostane počet bodů odpovídající pořadí.
                 scores[last] += count - 1;
                 deathOrder.add(last);
             }
 
             mode = Mode.ROUND_OVER;
-
-            roundOverUntil =
-                    System.currentTimeMillis()
-                            + 1700;
+            roundOverUntil = System.currentTimeMillis() + 1700;
         }
     }
 
     void kill(int i) {
-
-        if (players[i] == null
-                || !players[i].alive) {
-            return;
-        }
+        if (i < 0 || i >= players.length
+                || players[i] == null
+                || !players[i].alive) return;
 
         players[i].alive = false;
         players[i].left = false;
         players[i].right = false;
 
         deathOrder.add(i);
-
-        scores[i] +=
-                deathOrder.size() - 1;
+        scores[i] += deathOrder.size() - 1;
     }
 
     void updateAI(Player q, long now) {
+        if (now < q.nextAiMs) return;
 
-        if (now < q.nextAiMs) {
-            return;
-        }
-
-        long delay =
-                difficulty == 1
-                        ? 260
-                        : difficulty == 2
-                        ? 135
-                        : 65;
-
+        long delay = difficulty == 1 ? 260
+                : difficulty == 2 ? 130
+                : 65;
         q.nextAiMs = now + delay;
 
-        float[] turns = {
-                -1f,
-                0f,
-                1f
-        };
-
+        float[] turns = {-1f, 0f, 1f};
         float best = -Float.MAX_VALUE;
         float bestTurn = 0;
 
         for (float t : turns) {
+            float a = q.angle + t * (float)Math.toRadians(
+                    difficulty == 1 ? 38
+                            : difficulty == 2 ? 48
+                            : 58
+            );
 
-            float a =
-                    q.angle
-                            + t
-                            * (float) Math.toRadians(
-                            difficulty == 1
-                                    ? 38
-                                    : difficulty == 2
-                                    ? 48
-                                    : 58
-                    );
-
-            float score =
-                    spaceScore(q, a);
+            float score = spaceScore(q, a);
 
             if (difficulty >= 2) {
-                score +=
-                        openSideScore(q, a)
-                                * 0.35f;
+                score += openSideScore(q, a) * 0.35f;
             }
 
             if (difficulty == 3) {
-                score +=
-                        attackScore(q, a)
-                                * 0.55f;
+                score += attackScore(q, a) * 0.55f;
             }
 
-            score +=
-                    rnd.nextFloat()
-                            * (
-                            difficulty == 1
-                                    ? 30
-                                    : difficulty == 2
-                                    ? 10
-                                    : 3
-                    );
+            score += rnd.nextFloat() *
+                    (difficulty == 1 ? 30
+                            : difficulty == 2 ? 10 : 3);
 
             if (score > best) {
                 best = score;
@@ -580,74 +415,33 @@ class GameView extends View {
     }
 
     float spaceScore(Player q, float a) {
+        int max = difficulty == 1 ? 110
+                : difficulty == 2 ? 170
+                : 240;
 
-        int max =
-                difficulty == 1
-                        ? 100
-                        : difficulty == 2
-                        ? 155
-                        : 230;
-
-        int steps = 20;
         float score = 0;
 
-        for (
-                int d = 12;
-                d <= max;
-                d += max / steps
-        ) {
-
+        for (int d = 12; d <= max; d += 10) {
             int x = Math.round(
-                    q.x
-                            + (float) Math.cos(a)
-                            * d
-            );
-
+                    q.x + (float)Math.cos(a) * d);
             int y = Math.round(
-                    q.y
-                            + (float) Math.sin(a)
-                            * d
-            );
+                    q.y + (float)Math.sin(a) * d);
 
-            if (solidAt(x, y)) {
-                break;
-            }
-
-            score += 1.0f;
+            if (solidAt(x, y)) break;
+            score += 1f;
         }
 
         if (difficulty >= 2) {
+            for (int side = -1; side <= 1; side += 2) {
+                float aa = a + side * (float)Math.toRadians(18);
 
-            for (int side = -1;
-                 side <= 1;
-                 side += 2) {
+                for (int d = 20; d <= 110; d += 20) {
+                    int x = Math.round(
+                            q.x + (float)Math.cos(aa) * d);
+                    int y = Math.round(
+                            q.y + (float)Math.sin(aa) * d);
 
-                float aa =
-                        a
-                                + side
-                                * (float) Math.toRadians(18);
-
-                for (
-                        int d = 20;
-                        d <= 100;
-                        d += 20
-                ) {
-
-                    if (solidAt(
-                            Math.round(
-                                    q.x
-                                            + (float) Math.cos(aa)
-                                            * d
-                            ),
-                            Math.round(
-                                    q.y
-                                            + (float) Math.sin(aa)
-                                            * d
-                            )
-                    )) {
-                        break;
-                    }
-
+                    if (solidAt(x, y)) break;
                     score += 0.18f;
                 }
             }
@@ -657,116 +451,62 @@ class GameView extends View {
     }
 
     float openSideScore(Player q, float a) {
-
-        float left =
-                a - (float) Math.PI / 2f;
-
-        float right =
-                a + (float) Math.PI / 2f;
-
-        return
-                spaceScore(q, left) * 0.5f
-                        + spaceScore(q, right) * 0.5f;
+        float left = a - (float)Math.PI / 2f;
+        float right = a + (float)Math.PI / 2f;
+        return spaceScore(q, left) * 0.5f
+                + spaceScore(q, right) * 0.5f;
     }
 
     float attackScore(Player q, float a) {
-
         float best = 0;
-
         int count = totalPlayers();
 
         for (int i = 0; i < count; i++) {
+            Player target = players[i];
 
-            if (players[i] != null
-                    && players[i] != q
-                    && players[i].alive) {
+            if (target == null || target == q || !target.alive) continue;
 
-                float dx =
-                        players[i].x - q.x;
+            float dx = target.x - q.x;
+            float dy = target.y - q.y;
+            float dist = (float)Math.sqrt(dx * dx + dy * dy);
 
-                float dy =
-                        players[i].y - q.y;
+            if (dist < 1) continue;
 
-                float dist =
-                        (float) Math.sqrt(
-                                dx * dx + dy * dy
-                        );
+            float targetAngle = (float)Math.atan2(dy, dx);
+            float diff = Math.abs(
+                    normalizeAngle(targetAngle - a));
 
-                if (dist < 1) {
-                    continue;
-                }
+            float value = (float)Math.max(
+                    0, 900 - dist * 2)
+                    * (1f - diff / (float)Math.PI);
 
-                float target =
-                        (float) Math.atan2(
-                                dy,
-                                dx
-                        );
-
-                float diff =
-                        Math.abs(
-                                normalizeAngle(
-                                        target - a
-                                )
-                        );
-
-                float value =
-                        (float) Math.max(
-                                0,
-                                900 - dist * 2
-                        )
-                                * (
-                                1f
-                                        - diff
-                                        / (float) Math.PI
-                        );
-
-                best =
-                        Math.max(
-                                best,
-                                value / 40f
-                        );
-            }
+            best = Math.max(best, value / 40f);
         }
 
         return best;
     }
 
     float normalizeAngle(float a) {
-
-        while (a > Math.PI) {
-            a -= 2 * Math.PI;
-        }
-
-        while (a < -Math.PI) {
-            a += 2 * Math.PI;
-        }
-
+        while (a > Math.PI) a -= 2 * Math.PI;
+        while (a < -Math.PI) a += 2 * Math.PI;
         return a;
     }
 
     @Override
     protected void onDraw(Canvas c) {
-
         super.onDraw(c);
-
         layoutGame();
         update();
 
         c.drawColor(Color.BLACK);
 
         if (mode == Mode.MENU) {
-
             drawMenu(c);
             invalidate();
             return;
         }
 
-        c.drawBitmap(
-                trail,
-                0,
-                0,
-                p
-        );
+        c.drawBitmap(trail, 0, 0, p);
 
         p.setStyle(Paint.Style.FILL);
         p.setAntiAlias(false);
@@ -774,14 +514,8 @@ class GameView extends View {
         int count = totalPlayers();
 
         for (int i = 0; i < count; i++) {
-
-            if (players[i] != null
-                    && players[i].alive) {
-
-                p.setColor(
-                        players[i].color
-                );
-
+            if (players[i] != null && players[i].alive) {
+                p.setColor(players[i].color);
                 c.drawRect(
                         players[i].x - 4,
                         players[i].y - 4,
@@ -796,31 +530,16 @@ class GameView extends View {
         p.setStrokeWidth(2);
         p.setColor(Color.WHITE);
 
-        c.drawRect(
-                gameL,
-                gameT,
-                gameR,
-                gameB,
-                p
-        );
+        c.drawRect(gameL, gameT, gameR, gameB, p);
 
         drawHud(c);
         drawControls(c);
 
         if (mode == Mode.COUNTDOWN) {
+            int n = (int)Math.ceil(
+                    (countdownUntil - System.currentTimeMillis()) / 500.0);
 
-            int n =
-                    (int) Math.ceil(
-                            (
-                                    countdownUntil
-                                            - System.currentTimeMillis()
-                            ) / 500.0
-                    );
-
-            text.setTextSize(
-                    Math.min(width, height) * .18f
-            );
-
+            text.setTextSize(Math.min(width, height) * .18f);
             text.setColor(Color.WHITE);
 
             c.drawText(
@@ -833,277 +552,160 @@ class GameView extends View {
             invalidate();
 
         } else if (mode == Mode.ROUND_OVER) {
+            drawOverlay(c, "KONEC KOLA", "Další kolo...");
 
-            drawOverlay(
-                    c,
-                    "KONEC KOLA",
-                    "Další kolo..."
-            );
-
-            if (
-                    System.currentTimeMillis()
-                            >= roundOverUntil
-            ) {
+            if (System.currentTimeMillis() >= roundOverUntil) {
                 finishRound();
             } else {
                 invalidate();
             }
 
         } else if (mode == Mode.MATCH_OVER) {
-
             drawMatchOver(c);
-
         } else {
-
             invalidate();
         }
     }
 
     void drawHud(Canvas c) {
-
-        text.setTypeface(
-                Typeface.MONOSPACE
-        );
-
-        text.setTextSize(
-                Math.max(
-                        18,
-                        Math.min(width, height)
-                                * .036f
-                )
-        );
+        text.setTypeface(Typeface.MONOSPACE);
+        text.setTextSize(Math.max(
+                18, Math.min(width, height) * .036f));
 
         int count = totalPlayers();
 
         for (int i = 0; i < count; i++) {
+            if (players[i] == null) continue;
 
-            if (players[i] == null) {
-                continue;
-            }
+            text.setColor(players[i].color);
 
-            text.setColor(
-                    players[i].color
-            );
+            String s = (i == 0 && gameType == GameType.SOLO
+                    ? "TY  " : "H" + (i + 1) + "  ") + scores[i];
 
-            String s =
-                    (
-                            i == 0
-                                    && gameType == GameType.SOLO
-                                    ? "TY  "
-                                    : "H" + (i + 1) + "  "
-                    )
-                            + scores[i];
-
-            float x =
-                    width
-                            * (i + 1f)
-                            / (count + 1f);
-
-            float y =
-                    gameT - 12;
-
-            c.drawText(
-                    s,
-                    x,
-                    y,
-                    text
-            );
+            float x = width * (i + 1f) / (count + 1f);
+            c.drawText(s, x, gameT - 12, text);
         }
     }
 
+    /*
+     * NOVÉ OVLÁDÁNÍ:
+     * - SOLO: dva velké ovladače vlevo/vpravo dole.
+     * - 2 hráči: hráč 1 má celý levý ovladač, hráč 2 celý pravý.
+     *   Každý má uvnitř vlevo VLEVO a vpravo VPRAVO.
+     * - 3/4 hráči: každý hráč dostane vlastní kompaktní sloupec dole.
+     */
     void drawControls(Canvas c) {
+        int humanCount = gameType == GameType.SOLO ? 1 : totalPlayers();
 
-        int count = totalPlayers();
-
-        int humanCount =
-                gameType == GameType.SOLO
-                        ? 1
-                        : count;
-
-        for (int i = 0;
-             i < humanCount;
-             i++) {
-
-            if (gameType == GameType.SOLO
-                    && i > 0) {
-                continue;
-            }
-
-            boolean top =
-                    gameType == GameType.SOLO
-                            ? false
-                            : (
-                            count == 2
-                                    ? i == 0
-                                    : i < 2
-                    );
-
-            int half =
-                    count == 2
-                            ? 0
-                            : (i % 2);
-
-            float left =
-                    half == 0
-                            ? 0
-                            : width / 2f;
-
-            float right =
-                    half == 0
-                            ? width / 2f
-                            : width;
-
-            drawControlZone(
-                    c,
-                    top,
-                    left,
-                    right,
-                    top ? 0 : gameB,
-                    top ? gameT : height,
-                    i
-            );
+        for (int i = 0; i < humanCount; i++) {
+            if (i >= players.length || players[i] == null) continue;
+            drawPlayerControls(c, i, humanCount);
         }
     }
 
-    void drawControlZone(
-            Canvas c,
-            boolean top,
-            float left,
-            float right,
-            float y0,
-            float y1,
-            int playerIndex
-    ) {
+    void drawPlayerControls(Canvas c, int playerIndex, int humanCount) {
+        float colLeft;
+        float colRight;
 
-        if (players[playerIndex] == null) {
-            return;
+        if (gameType == GameType.SOLO) {
+            colLeft = 0;
+            colRight = width;
+        } else if (humanCount == 2) {
+            // Hráč 1 vlevo, hráč 2 vpravo.
+            float half = width / 2f;
+            colLeft = playerIndex == 0 ? 0 : half;
+            colRight = playerIndex == 0 ? half : width;
+        } else {
+            // 3 nebo 4 hráči: rovnoměrné sloupce.
+            float w = width / (float)humanCount;
+            colLeft = playerIndex * w;
+            colRight = (playerIndex + 1) * w;
         }
 
-        p.setStyle(Paint.Style.FILL);
-        p.setColor(
-                Color.argb(
-                        18,
-                        255,
-                        255,
-                        255
-                )
-        );
+        float pad = Math.max(6, Math.min(width, height) * .012f);
+        float top = controlTop + pad;
+        float bottom = height - pad;
+        float mid = (colLeft + colRight) / 2f;
 
-        p.setAntiAlias(false);
-
-        c.drawRect(
-                left,
-                y0,
-                right,
-                y1,
-                p
-        );
-
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(2);
-
-        p.setColor(
-                Color.argb(
-                        155,
-                        255,
-                        255,
-                        255
-                )
-        );
-
-        c.drawRect(
-                left + 8,
-                y0 + 8,
-                right - 8,
-                y1 - 8,
-                p
-        );
-
-        float mid =
-                (left + right) / 2f;
-
-        float cy =
-                (y0 + y1) / 2f;
-
-        String l =
-                top
-                        ? "VPRAVO"
-                        : "VLEVO";
-
-        String r =
-                top
-                        ? "VLEVO"
-                        : "VPRAVO";
-
-        text.setTextSize(
-                Math.max(
-                        18,
-                        Math.min(width, height)
-                                * .032f
-                )
-        );
-
-        text.setColor(
+        // Levé tlačítko.
+        drawButton(
+                c,
+                colLeft + pad,
+                top,
+                mid - pad / 2f,
+                bottom,
+                "◀",
+                "VLEVO",
                 players[playerIndex].color
         );
 
-        c.drawText(
-                "H" + (playerIndex + 1),
-                mid,
-                y0 + 25,
-                text
+        // Pravé tlačítko.
+        drawButton(
+                c,
+                mid + pad / 2f,
+                top,
+                colRight - pad,
+                bottom,
+                "▶",
+                "VPRAVO",
+                players[playerIndex].color
         );
 
-        text.setColor(Color.WHITE);
-
-        text.setTextSize(
-                Math.max(
-                        16,
-                        Math.min(width, height)
-                                * .026f
-                )
-        );
-
-        c.drawText(
-                l,
-                (left + mid) / 2f,
-                cy + 8,
-                text
-        );
+        text.setTextSize(Math.max(
+                12, Math.min(width, height) *
+                        (humanCount >= 3 ? .020f : .025f)));
+        text.setColor(players[playerIndex].color);
 
         c.drawText(
-                r,
-                (mid + right) / 2f,
-                cy + 8,
+                gameType == GameType.SOLO
+                        ? "TY"
+                        : "H" + (playerIndex + 1),
+                mid,
+                top + 16,
                 text
-        );
-
-        p.setColor(
-                Color.argb(
-                        90,
-                        255,
-                        255,
-                        255
-                )
-        );
-
-        c.drawLine(
-                mid,
-                y0 + 18,
-                mid,
-                y1 - 18,
-                p
         );
     }
 
-    void finishRound() {
+    void drawButton(
+            Canvas c,
+            float left,
+            float top,
+            float right,
+            float bottom,
+            String symbol,
+            String label,
+            int playerColor
+    ) {
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Color.argb(28, 255, 255, 255));
+        c.drawRect(left, top, right, bottom, p);
 
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(2);
+        p.setColor(Color.argb(190, 255, 255, 255));
+        c.drawRect(left, top, right, bottom, p);
+
+        text.setTextSize(Math.max(
+                22, Math.min(width, height) * .055f));
+        text.setColor(playerColor);
+
+        float cx = (left + right) / 2f;
+        float cy = (top + bottom) / 2f - 4;
+
+        c.drawText(symbol, cx, cy, text);
+
+        text.setTextSize(Math.max(
+                11, Math.min(width, height) * .018f));
+        text.setColor(Color.WHITE);
+
+        c.drawText(label, cx, bottom - 10, text);
+    }
+
+    void finishRound() {
         int count = totalPlayers();
 
         for (int i = 0; i < count; i++) {
-
             if (scores[i] >= targetScore) {
-
                 mode = Mode.MATCH_OVER;
                 return;
             }
@@ -1112,60 +714,21 @@ class GameView extends View {
         startRound();
     }
 
-    void drawOverlay(
-            Canvas c,
-            String title,
-            String sub
-    ) {
-
+    void drawOverlay(Canvas c, String title, String sub) {
         p.setStyle(Paint.Style.FILL);
-
-        p.setColor(
-                Color.argb(
-                        205,
-                        0,
-                        0,
-                        0
-                )
-        );
-
-        c.drawRect(
-                0,
-                0,
-                width,
-                height,
-                p
-        );
+        p.setColor(Color.argb(205, 0, 0, 0));
+        c.drawRect(0, 0, width, height, p);
 
         text.setColor(Color.WHITE);
+        text.setTextSize(Math.min(width, height) * .075f);
 
-        text.setTextSize(
-                Math.min(width, height)
-                        * .075f
-        );
+        c.drawText(title, width / 2f, height * .45f, text);
 
-        c.drawText(
-                title,
-                width / 2f,
-                height * .45f,
-                text
-        );
-
-        text.setTextSize(
-                Math.min(width, height)
-                        * .032f
-        );
-
-        c.drawText(
-                sub,
-                width / 2f,
-                height * .55f,
-                text
-        );
+        text.setTextSize(Math.min(width, height) * .032f);
+        c.drawText(sub, width / 2f, height * .55f, text);
     }
 
     void drawMatchOver(Canvas c) {
-
         drawOverlay(
                 c,
                 "ZÁPAS SKONČIL",
@@ -1174,84 +737,41 @@ class GameView extends View {
 
         int count = totalPlayers();
 
-        text.setTextSize(
-                Math.min(width, height)
-                        * .04f
-        );
+        text.setTextSize(Math.min(width, height) * .04f);
 
         float y = height * .64f;
 
         for (int i = 0; i < count; i++) {
+            if (players[i] == null) continue;
 
-            if (players[i] == null) {
-                continue;
-            }
-
-            text.setColor(
-                    players[i].color
-            );
+            text.setColor(players[i].color);
 
             c.drawText(
-                    (
-                            i == 0
-                                    && gameType == GameType.SOLO
-                                    ? "TY"
-                                    : "H" + (i + 1)
-                    )
-                            + "  "
-                            + scores[i],
+                    (i == 0 && gameType == GameType.SOLO
+                            ? "TY" : "H" + (i + 1))
+                            + "  " + scores[i],
                     width / 2f,
                     y,
                     text
             );
 
-            y +=
-                    Math.min(width, height)
-                            * .055f;
+            y += Math.min(width, height) * .055f;
         }
     }
 
     void drawMenu(Canvas c) {
-
         p.setStyle(Paint.Style.FILL);
         p.setColor(Color.BLACK);
-
-        c.drawRect(
-                0,
-                0,
-                width,
-                height,
-                p
-        );
+        c.drawRect(0, 0, width, height, p);
 
         text.setColor(Color.WHITE);
-        text.setTypeface(
-                Typeface.MONOSPACE
-        );
+        text.setTypeface(Typeface.MONOSPACE);
 
-        text.setTextSize(
-                Math.min(width, height)
-                        * .10f
-        );
+        text.setTextSize(Math.min(width, height) * .10f);
+        c.drawText("TRON", width / 2f, height * .11f, text);
 
-        c.drawText(
-                "TRON",
-                width / 2f,
-                height * .11f,
-                text
-        );
-
-        text.setTextSize(
-                Math.min(width, height)
-                        * .055f
-        );
-
-        c.drawText(
-                "LOCAL",
-                width / 2f,
-                height * .17f,
-                text
-        );
+        text.setTextSize(Math.min(width, height) * .055f);
+        c.drawText("LOCAL", width / 2f, height * .17f, text);
 
         if (menuPage == 0) {
             drawMainMenu(c);
@@ -1263,206 +783,88 @@ class GameView extends View {
     }
 
     void drawMainMenu(Canvas c) {
-
         float y = height * .28f;
 
-        drawBigButton(
-                c,
-                y,
-                "HRA PRO VÍCE HRÁČŮ",
-                gameType == GameType.MULTI
-        );
+        drawBigButton(c, y, "HRA PRO VÍCE HRÁČŮ", gameType == GameType.MULTI);
+        drawBigButton(c, y + height * .16f,
+                "HRA PRO JEDNOHO", gameType == GameType.SOLO);
 
-        drawBigButton(
-                c,
-                y + height * .16f,
-                "HRA PRO JEDNOHO",
-                gameType == GameType.SOLO
-        );
-
-        text.setColor(
-                Color.argb(
-                        150,
-                        255,
-                        255,
-                        255
-                )
-        );
-
-        text.setTextSize(
-                Math.min(width, height)
-                        * .026f
-        );
+        text.setColor(Color.argb(150, 255, 255, 255));
+        text.setTextSize(Math.min(width, height) * .026f);
 
         c.drawText(
                 "2–4 hráči na jednom telefonu",
-                width / 2f,
-                height * .79f,
-                text
-        );
+                width / 2f, height * .79f, text);
 
         c.drawText(
                 "Dotykové ovládání • bez internetu",
-                width / 2f,
-                height * .84f,
-                text
-        );
+                width / 2f, height * .84f, text);
 
-        drawBigButton(
-                c,
-                height * .90f,
-                "POKRAČOVAT",
-                false
-        );
+        drawBigButton(c, height * .90f, "POKRAČOVAT", false);
     }
 
     void drawMultiMenu(Canvas c) {
-
-        text.setTextSize(
-                Math.min(width, height)
-                        * .045f
-        );
-
+        text.setTextSize(Math.min(width, height) * .045f);
         text.setColor(Color.WHITE);
 
         c.drawText(
                 "HRA PRO VÍCE HRÁČŮ",
-                width / 2f,
-                height * .24f,
-                text
-        );
+                width / 2f, height * .24f, text);
 
-        drawOption(
-                c,
-                height * .34f,
-                "POČET HRÁČŮ",
-                activePlayers + " hráči"
-        );
+        drawOption(c, height * .34f,
+                "POČET HRÁČŮ", activePlayers + " hráči");
 
-        drawOption(
-                c,
-                height * .49f,
-                "BODY DO VÍTĚZSTVÍ",
-                targetScore + " bodů"
-        );
+        drawOption(c, height * .49f,
+                "BODY DO VÍTĚZSTVÍ", targetScore + " bodů");
 
-        drawOption(
-                c,
-                height * .64f,
-                "RYCHLOST",
-                speedName()
-        );
+        drawOption(c, height * .64f,
+                "RYCHLOST", speedName());
 
-        drawBigButton(
-                c,
-                height * .80f,
-                "SPUSTIT HRU",
-                false
-        );
-
-        drawSmallBack(
-                c,
-                height * .91f
-        );
+        drawBigButton(c, height * .80f, "SPUSTIT HRU", false);
+        drawSmallBack(c, height * .91f);
     }
 
     void drawSoloMenu(Canvas c) {
-
-        text.setTextSize(
-                Math.min(width, height)
-                        * .045f
-        );
-
+        text.setTextSize(Math.min(width, height) * .045f);
         text.setColor(Color.WHITE);
 
         c.drawText(
                 "HRA PRO JEDNOHO",
-                width / 2f,
-                height * .24f,
-                text
-        );
+                width / 2f, height * .24f, text);
 
-        drawOption(
-                c,
-                height * .34f,
+        drawOption(c, height * .34f,
                 "POČET PROTIVNÍKŮ",
-                activePlayers
-                        + "  (celkem "
-                        + (activePlayers + 1)
-                        + ")"
-        );
+                activePlayers + "  (celkem " + (activePlayers + 1) + ")");
 
-        drawOption(
-                c,
-                height * .47f,
-                "OBTÍŽNOST",
-                difficultyName()
-        );
+        drawOption(c, height * .47f,
+                "OBTÍŽNOST", difficultyName());
 
-        drawOption(
-                c,
-                height * .60f,
-                "BODY DO VÍTĚZSTVÍ",
-                targetScore + " bodů"
-        );
+        drawOption(c, height * .60f,
+                "BODY DO VÍTĚZSTVÍ", targetScore + " bodů");
 
-        drawOption(
-                c,
-                height * .73f,
-                "RYCHLOST",
-                speedName()
-        );
+        drawOption(c, height * .73f,
+                "RYCHLOST", speedName());
 
-        drawBigButton(
-                c,
-                height * .86f,
-                "SPUSTIT HRU",
-                false
-        );
-
-        drawSmallBack(
-                c,
-                height * .95f
-        );
+        drawBigButton(c, height * .86f, "SPUSTIT HRU", false);
+        drawSmallBack(c, height * .95f);
     }
 
     String speedName() {
-
-        return speedLevel == 1
-                ? "POMALÁ"
-                : speedLevel == 2
-                ? "NORMÁLNÍ"
+        return speedLevel == 1 ? "POMALÁ"
+                : speedLevel == 2 ? "NORMÁLNÍ"
                 : "RYCHLÁ";
     }
 
     String difficultyName() {
-
-        return difficulty == 1
-                ? "LEHKÁ"
-                : difficulty == 2
-                ? "STŘEDNÍ"
+        return difficulty == 1 ? "LEHKÁ"
+                : difficulty == 2 ? "STŘEDNÍ"
                 : "TĚŽKÁ";
     }
 
-    void drawOption(
-            Canvas c,
-            float cy,
-            String label,
-            String value
-    ) {
-
-        float w =
-                Math.min(
-                        width * .86f,
-                        650
-                );
-
-        float h =
-                Math.max(
-                        64,
-                        Math.min(width, height)
-                                * .085f
-                );
+    void drawOption(Canvas c, float cy, String label, String value) {
+        float w = Math.min(width * .86f, 650);
+        float h = Math.max(
+                64, Math.min(width, height) * .085f);
 
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeWidth(2);
@@ -1473,80 +875,33 @@ class GameView extends View {
                 cy - h / 2,
                 width / 2f + w / 2,
                 cy + h / 2,
-                p
-        );
+                p);
 
-        text.setTextSize(
-                Math.min(width, height)
-                        * .023f
-        );
+        text.setTextSize(Math.min(width, height) * .023f);
+        text.setColor(Color.argb(170, 255, 255, 255));
 
-        text.setColor(
-                Color.argb(
-                        170,
-                        255,
-                        255,
-                        255
-                )
-        );
+        c.drawText(label, width / 2f, cy - 7, text);
 
-        c.drawText(
-                label,
-                width / 2f,
-                cy - 7,
-                text
-        );
-
-        text.setTextSize(
-                Math.min(width, height)
-                        * .032f
-        );
-
+        text.setTextSize(Math.min(width, height) * .032f);
         text.setColor(Color.WHITE);
 
-        c.drawText(
-                value,
-                width / 2f,
-                cy + 22,
-                text
-        );
+        c.drawText(value, width / 2f, cy + 22, text);
     }
 
-    void drawBigButton(
-            Canvas c,
-            float cy,
-            String label,
-            boolean selected
-    ) {
-
-        float w =
-                Math.min(
-                        width * .82f,
-                        650
-                );
-
-        float h =
-                Math.max(
-                        66,
-                        Math.min(width, height)
-                                * .09f
-                );
+    void drawBigButton(Canvas c, float cy, String label, boolean selected) {
+        float w = Math.min(width * .82f, 650);
+        float h = Math.max(
+                66, Math.min(width, height) * .09f);
 
         p.setStyle(Paint.Style.FILL);
-
-        p.setColor(
-                selected
-                        ? Color.WHITE
-                        : Color.BLACK
-        );
+        p.setColor(selected ? Color.WHITE : Color.BLACK);
 
         c.drawRect(
                 width / 2f - w / 2,
                 cy - h / 2,
                 width / 2f + w / 2,
                 cy + h / 2,
-                p
-        );
+                p);
 
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeWidth(2);
@@ -1557,302 +912,120 @@ class GameView extends View {
                 cy - h / 2,
                 width / 2f + w / 2,
                 cy + h / 2,
-                p
-        );
+                p);
 
-        text.setTextSize(
-                Math.min(width, height)
-                        * .032f
-        );
+        text.setTextSize(Math.min(width, height) * .032f);
+        text.setColor(selected ? Color.BLACK : Color.WHITE);
 
-        text.setColor(
-                selected
-                        ? Color.BLACK
-                        : Color.WHITE
-        );
-
-        c.drawText(
-                label,
-                width / 2f,
-                cy + 11,
-                text
-        );
+        c.drawText(label, width / 2f, cy + 11, text);
     }
 
-    void drawSmallBack(
-            Canvas c,
-            float cy
-    ) {
-
-        text.setColor(
-                Color.argb(
-                        180,
-                        255,
-                        255,
-                        255
-                )
-        );
-
-        text.setTextSize(
-                Math.min(width, height)
-                        * .028f
-        );
-
-        c.drawText(
-                "ZPĚT",
-                width / 2f,
-                cy,
-                text
-        );
+    void drawSmallBack(Canvas c, float cy) {
+        text.setColor(Color.argb(180, 255, 255, 255));
+        text.setTextSize(Math.min(width, height) * .028f);
+        c.drawText("ZPĚT", width / 2f, cy, text);
     }
 
-    boolean inRect(
-            float x,
-            float y,
-            float top,
-            float bottom
-    ) {
+    boolean inRect(float x, float y, float top, float bottom) {
         return y > top && y < bottom;
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
-
         float x = e.getX();
         float y = e.getY();
-
-        int action =
-                e.getActionMasked();
+        int action = e.getActionMasked();
 
         if (mode == Mode.MENU) {
-
-            if (action != MotionEvent.ACTION_UP) {
-                return true;
-            }
+            if (action != MotionEvent.ACTION_UP) return true;
 
             if (menuPage == 0) {
-
-                if (inRect(
-                        x,
-                        y,
-                        height * .20f,
-                        height * .38f
-                )) {
-
-                    gameType =
-                            GameType.MULTI;
-
+                if (inRect(x, y, height * .20f, height * .38f)) {
+                    gameType = GameType.MULTI;
                     menuPage = 1;
-
                     invalidate();
-
                     return true;
                 }
 
-                if (inRect(
-                        x,
-                        y,
-                        height * .38f,
-                        height * .55f
-                )) {
-
-                    gameType =
-                            GameType.SOLO;
-
+                if (inRect(x, y, height * .38f, height * .55f)) {
+                    gameType = GameType.SOLO;
                     menuPage = 2;
-
                     invalidate();
-
                     return true;
                 }
 
-                if (inRect(
-                        x,
-                        y,
-                        height * .84f,
-                        height * .97f
-                )) {
-
-                    gameType =
-                            GameType.MULTI;
-
+                if (inRect(x, y, height * .84f, height * .97f)) {
+                    gameType = GameType.MULTI;
                     menuPage = 1;
-
                     invalidate();
-
                     return true;
                 }
-
             } else if (menuPage == 1) {
-
-                if (inRect(
-                        x,
-                        y,
-                        height * .29f,
-                        height * .40f
-                )) {
-
-                    activePlayers =
-                            activePlayers >= 4
-                                    ? 2
-                                    : activePlayers + 1;
-
+                if (inRect(x, y, height * .29f, height * .40f)) {
+                    activePlayers = activePlayers >= 4 ? 2 : activePlayers + 1;
                     invalidate();
-
                     return true;
                 }
 
-                if (inRect(
-                        x,
-                        y,
-                        height * .43f,
-                        height * .55f
-                )) {
-
-                    targetScore =
-                            targetScore == 50
-                                    ? 5
-                                    : targetScore == 5
-                                    ? 10
-                                    : targetScore == 10
-                                    ? 20
-                                    : 50;
-
+                if (inRect(x, y, height * .43f, height * .55f)) {
+                    targetScore = targetScore == 50 ? 5
+                            : targetScore == 5 ? 10
+                            : targetScore == 10 ? 20 : 50;
                     invalidate();
-
                     return true;
                 }
 
-                if (inRect(
-                        x,
-                        y,
-                        height * .58f,
-                        height * .70f
-                )) {
-
-                    speedLevel =
-                            speedLevel == 3
-                                    ? 1
-                                    : speedLevel + 1;
-
+                if (inRect(x, y, height * .58f, height * .70f)) {
+                    speedLevel = speedLevel == 3 ? 1 : speedLevel + 1;
                     invalidate();
-
                     return true;
                 }
 
-                if (inRect(
-                        x,
-                        y,
-                        height * .74f,
-                        height * .88f
-                )) {
-
+                if (inRect(x, y, height * .74f, height * .88f)) {
                     startMatch();
-
                     return true;
                 }
 
                 if (y > height * .88f) {
-
                     menuPage = 0;
-
                     invalidate();
-
                     return true;
                 }
-
             } else {
-
-                if (inRect(
-                        x,
-                        y,
-                        height * .29f,
-                        height * .40f
-                )) {
-
-                    activePlayers =
-                            activePlayers >= 3
-                                    ? 1
-                                    : activePlayers + 1;
-
+                if (inRect(x, y, height * .29f, height * .40f)) {
+                    activePlayers = activePlayers >= 3 ? 1 : activePlayers + 1;
                     invalidate();
-
                     return true;
                 }
 
-                if (inRect(
-                        x,
-                        y,
-                        height * .42f,
-                        height * .53f
-                )) {
-
-                    difficulty =
-                            difficulty >= 3
-                                    ? 1
-                                    : difficulty + 1;
-
+                if (inRect(x, y, height * .42f, height * .53f)) {
+                    difficulty = difficulty >= 3 ? 1 : difficulty + 1;
                     invalidate();
-
                     return true;
                 }
 
-                if (inRect(
-                        x,
-                        y,
-                        height * .55f,
-                        height * .66f
-                )) {
-
-                    targetScore =
-                            targetScore == 50
-                                    ? 5
-                                    : targetScore == 5
-                                    ? 10
-                                    : targetScore == 10
-                                    ? 20
-                                    : 50;
-
+                if (inRect(x, y, height * .55f, height * .66f)) {
+                    targetScore = targetScore == 50 ? 5
+                            : targetScore == 5 ? 10
+                            : targetScore == 10 ? 20 : 50;
                     invalidate();
-
                     return true;
                 }
 
-                if (inRect(
-                        x,
-                        y,
-                        height * .68f,
-                        height * .80f
-                )) {
-
-                    speedLevel =
-                            speedLevel == 3
-                                    ? 1
-                                    : speedLevel + 1;
-
+                if (inRect(x, y, height * .68f, height * .80f)) {
+                    speedLevel = speedLevel == 3 ? 1 : speedLevel + 1;
                     invalidate();
-
                     return true;
                 }
 
-                if (inRect(
-                        x,
-                        y,
-                        height * .81f,
-                        height * .92f
-                )) {
-
+                if (inRect(x, y, height * .81f, height * .92f)) {
                     startMatch();
-
                     return true;
                 }
 
                 if (y > height * .91f) {
-
                     menuPage = 0;
-
                     invalidate();
-
                     return true;
                 }
             }
@@ -1862,64 +1035,34 @@ class GameView extends View {
 
         if (mode == Mode.MATCH_OVER
                 && action == MotionEvent.ACTION_UP) {
-
             mode = Mode.MENU;
             menuPage = 0;
-
             invalidate();
-
             return true;
         }
 
-        if (mode == Mode.PLAYING
-                || mode == Mode.COUNTDOWN) {
+        if (mode == Mode.PLAYING || mode == Mode.COUNTDOWN) {
+            int idx = controlPlayer(x, y);
 
-            int idx =
-                    controlPlayer(x, y);
-
-            // Důležitá ochrana proti původnímu NPE:
-            // nikdy nepřistupujeme k players[idx],
-            // pokud je idx mimo rozsah nebo Player neexistuje.
             if (idx >= 0
                     && idx < players.length
                     && players[idx] != null
                     && !players[idx].ai) {
 
-                boolean leftTurn =
-                        controlMeansLeft(
-                                x,
-                                y,
-                                idx
-                        );
+                int button = controlButton(x, y, idx);
 
-                if (
-                        action == MotionEvent.ACTION_DOWN
-                                || action == MotionEvent.ACTION_MOVE
-                ) {
-
-                    players[idx].left =
-                            leftTurn;
-
-                    players[idx].right =
-                            !leftTurn;
-
-                } else if (
-                        action == MotionEvent.ACTION_UP
-                                || action == MotionEvent.ACTION_CANCEL
-                ) {
-
-                    players[idx].left = false;
-                    players[idx].right = false;
+                if (button >= 0) {
+                    if (action == MotionEvent.ACTION_DOWN
+                            || action == MotionEvent.ACTION_MOVE) {
+                        players[idx].left = button == 0;
+                        players[idx].right = button == 1;
+                    } else if (action == MotionEvent.ACTION_UP
+                            || action == MotionEvent.ACTION_CANCEL) {
+                        players[idx].left = false;
+                        players[idx].right = false;
+                    }
                 }
 
-                return true;
-            }
-
-            if (
-                    action == MotionEvent.ACTION_UP
-                            && y >= gameT
-                            && y <= gameB
-            ) {
                 return true;
             }
         }
@@ -1927,75 +1070,44 @@ class GameView extends View {
         return true;
     }
 
-    int controlPlayer(
-            float x,
-            float y
-    ) {
+    int controlPlayer(float x, float y) {
+        if (y < controlTop) return -1;
 
         int count = totalPlayers();
 
         if (gameType == GameType.SOLO) {
-
-            return y > gameB
-                    ? 0
-                    : -1;
+            return 0;
         }
 
         if (count == 2) {
-
-            if (y < gameT) {
-                return 0;
-            }
-
-            if (y > gameB) {
-                return 1;
-            }
-
-            return -1;
+            return x < width / 2f ? 0 : 1;
         }
 
-        if (y < gameT) {
-
-            return x < width / 2f
-                    ? 0
-                    : 1;
-        }
-
-        if (y > gameB) {
-
-            return x < width / 2f
-                    ? 2
-                    : 3;
-        }
-
-        return -1;
+        int idx = (int)(x / (width / (float)count));
+        return Math.max(0, Math.min(count - 1, idx));
     }
 
-    boolean controlMeansLeft(
-            float x,
-            float y,
-            int idx
-    ) {
+    int controlButton(float x, float y, int playerIndex) {
+        if (y < controlTop) return -1;
 
-        boolean top;
+        int count = totalPlayers();
+
+        float left, right;
 
         if (gameType == GameType.SOLO) {
-
-            top = false;
-
+            left = 0;
+            right = width;
+        } else if (count == 2) {
+            float half = width / 2f;
+            left = playerIndex == 0 ? 0 : half;
+            right = playerIndex == 0 ? half : width;
         } else {
-
-            top =
-                    totalPlayers() == 2
-                            ? idx == 0
-                            : idx < 2;
+            float w = width / (float)count;
+            left = playerIndex * w;
+            right = (playerIndex + 1) * w;
         }
 
-        boolean screenLeft =
-                x < width / 2f;
-
-        return top
-                ? !screenLeft
-                : screenLeft;
+        float mid = (left + right) / 2f;
+        return x < mid ? 0 : 1;
     }
 }
